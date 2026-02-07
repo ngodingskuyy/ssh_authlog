@@ -55,7 +55,7 @@ else
     -x "./.pytest_cache/*" \
     -x "./.venv/*" \
     -x "./make_release.sh" \
-    -x "./release.sh" \
+    -x "./release.sh"
 fi
 
 echo "$OUT_FILE"
