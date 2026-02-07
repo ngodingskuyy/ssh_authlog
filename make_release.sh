@@ -12,7 +12,13 @@ if [ ! -f "info.json" ]; then
   exit 1
 fi
 
-NAME="ssh_authlog"
+NAME="$(python3 - <<'PY'
+import json
+with open('info.json','r',encoding='utf-8') as f:
+  data=json.load(f)
+print(str(data.get('name','ssh_authlog')).strip())
+PY
+)"
 VERSION="$(python3 - <<'PY'
 import json
 with open('info.json','r',encoding='utf-8') as f:
