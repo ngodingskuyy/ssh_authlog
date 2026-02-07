@@ -3,7 +3,7 @@
   "name": "ssh_authlog",
   "type": "plugin",
   "ps": "View SSH login success/failed events (auth.log/secure/messages/journalctl) in detail.",
-  "versions": "1.1",
+  "versions": "1.1.1",
   "author": "NgodingSkuyy",
   "home": "https://ngodingskuyy.dev",
   "id": 0,
