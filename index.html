@@ -1,0 +1,241 @@
+<style>
+    .bt-w-menu {
+        width: 110px;
+    }
+
+    .bt-w-con {
+        margin-left: 110px;
+    }
+
+    .tatal-num {
+        text-align: center;
+        border-top: 1px solid #eee;
+        border-bottom: 1px solid #eee;
+        margin: 10px 0 10px;
+    }
+
+    .total-virus {
+        display: inline-block;
+        text-align: center;
+        padding: 10px 6%;
+        min-width: 180px;
+    }
+
+    .total-virus span:nth-child(1) {
+        font-size: 14px;
+        letter-spacing: 0.2px;
+        color: #444;
+        display: inline-block;
+        margin-bottom: 6px;
+    }
+
+    .total-virus .val {
+        font-size: 18px;
+        font-weight: bold;
+    }
+
+    .demo-table {
+        max-height: inherit;
+        height: 420px;
+        overflow: auto;
+        border: 1px solid #ddd;
+    }
+
+    .demo-table table {
+        border: none !important;
+    }
+
+    .demo-table table tbody tr td {
+        vertical-align: top;
+    }
+
+    .ssh-raw {
+        max-width: 520px;
+        word-break: break-all;
+        display: block;
+    }
+
+    .ssh-toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .ssh-toolbar .bt-input-text {
+        height: 32px;
+    }
+
+    .ssh-source {
+        margin-left: 8px;
+        color: #666;
+    }
+</style>
+
+<div class="bt-form" id="ssh_authlog_plugin">
+    <div class="bt-w-main">
+        <div class="bt-w-menu">
+            <p class="bgw">SSH Auth Log</p>
+        </div>
+        <div class="bt-w-con pd15" style="max-height: 555px; overflow: auto; padding-bottom: 0;">
+            <div class="ssh-toolbar">
+                <button class="btn btn-success btn-sm" onclick="sshAuthlogLoad()">Refresh</button>
+                <label style="margin:0;">
+                    <input type="checkbox" id="ssh_authlog_today" onchange="sshAuthlogLoad()"> Today only
+                </label>
+                <span class="c6" style="margin-left: 5px;">Source</span>
+                <select class="bt-input-text" style="width: 180px;" id="ssh_authlog_source_sel"
+                    onchange="sshAuthlogLoad()">
+                    <option value="auto" selected>Auto</option>
+                    <option value="journalctl">journalctl</option>
+                    <option value="auth.log">/var/log/auth.log</option>
+                    <option value="secure">/var/log/secure</option>
+                    <option value="messages">/var/log/messages</option>
+                </select>
+                <input class="bt-input-text" style="width:260px;" id="ssh_authlog_q"
+                    placeholder="Filter user / ip / status / method..."
+                    onkeyup="if(event.key==='Enter') sshAuthlogLoad();" />
+                <span class="c6" style="margin-left: 5px;">Limit</span>
+                <select class="bt-input-text" style="width:120px;" id="ssh_authlog_limit" onchange="sshAuthlogLoad()">
+                    <option value="100">100</option>
+                    <option value="200" selected>200</option>
+                    <option value="500">500</option>
+                </select>
+                <span class="ssh-source" id="ssh_authlog_source"></span>
+            </div>
+
+            <div class="tatal-num">
+                <div class="total-virus">
+                    <span>Total success</span><br>
+                    <span class="val" style="color: #5cb85c;" id="ssh_authlog_total_success">-</span>
+                </div>
+                <div class="total-virus">
+                    <span>Total failed</span><br>
+                    <span class="val" style="color: #d9534f;" id="ssh_authlog_total_failed">-</span>
+                </div>
+                <div class="total-virus">
+                    <span>Today success</span><br>
+                    <span class="val" style="color: #5cb85c;" id="ssh_authlog_today_success">-</span>
+                </div>
+                <div class="total-virus">
+                    <span>Today failed</span><br>
+                    <span class="val" style="color: #d9534f;" id="ssh_authlog_today_failed">-</span>
+                </div>
+            </div>
+
+            <div class="demo-table" id="ssh_authlog_table_wrap">
+                <div class="divtable">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th width="160">Time</th>
+                                <th width="80">Status</th>
+                                <th width="120">User</th>
+                                <th width="140">IP</th>
+                                <th width="80">Port</th>
+                                <th width="120">Method</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ssh_authlog_rows"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <ul class="help-info-text c7" style="margin-top: 10px;">
+                <li>Filter supports user, ip, status (success/failed), method (password/publickey), and raw text.</li>
+                <li>Source shows where events are read from (e.g. /var/log/auth.log, /var/log/secure, journalctl).</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    // define window size (same style as official plugins)
+    $('.layui-layer-page').css({ 'width': '920px', 'top': '75px' });
+
+    function sshAuthlogReq(method, data, cb) {
+        $.post('/plugin?action=a&name=ssh_authlog&s=' + method, data || {}, function (res) {
+            try { if (typeof res === 'string') res = JSON.parse(res); } catch (e) { }
+            cb && cb(res);
+        });
+    }
+
+    function sshAuthlogFixedThead(selector) {
+        try {
+            $(selector).scroll(function () {
+                var b = this.scrollTop;
+                this.querySelector("thead").style.transform = "translateY(" + b + "px)";
+            });
+        } catch (e) { }
+    }
+
+    function sshAuthlogLoad() {
+        var selectedSource = $('#ssh_authlog_source_sel').val() || 'auto';
+        sshAuthlogReq('get_stats', { source: selectedSource }, function (res) {
+            if (!res || !res.status) {
+                $('#ssh_authlog_total_success').text('-');
+                $('#ssh_authlog_total_failed').text('-');
+                $('#ssh_authlog_today_success').text('-');
+                $('#ssh_authlog_today_failed').text('-');
+                $('#ssh_authlog_source').text('Failed to load stats');
+                return;
+            }
+            var d = res.data;
+            $('#ssh_authlog_total_success').text(d.total_success);
+            $('#ssh_authlog_total_failed').text(d.total_failed);
+            $('#ssh_authlog_today_success').text(d.today_success);
+            $('#ssh_authlog_today_failed').text(d.today_failed);
+            $('#ssh_authlog_source').text(d.source ? ('Source: ' + d.source) : '');
+        });
+
+        var limit = $('#ssh_authlog_limit').val();
+        var q = $('#ssh_authlog_q').val();
+        var today = $('#ssh_authlog_today').prop('checked') ? 1 : 0;
+
+        sshAuthlogReq('get_events', { limit: limit, q: q, today: today, source: selectedSource }, function (res) {
+            if (!res || !res.status) {
+                $('#ssh_authlog_rows').html('<tr><td colspan="6">Failed to load events</td></tr>');
+                return;
+            }
+            var rows = res.data.map(function (e) {
+                var color = (e.status === 'success') ? '#5cb85c' : '#d9534f';
+                return '<tr>' +
+                    '<td>' + e.ts + '</td>' +
+                    '<td style="color:' + color + ';">' + e.status + '</td>' +
+                    '<td>' + e.user + '</td>' +
+                    '<td>' + e.ip + '</td>' +
+                    '<td>' + e.port + '</td>' +
+                    '<td>' + e.method + '</td>' +
+                    '</tr>';
+            }).join('');
+            $('#ssh_authlog_rows').html(rows || '<tr><td colspan="6">No events</td></tr>');
+        });
+    }
+
+    function sshAuthlogInitSources() {
+        sshAuthlogReq('get_sources', {}, function (res) {
+            if (!res || !res.status || !res.data) return;
+            var options = res.data.map(function (s) {
+                var label = s.label || s.key;
+                if (s.type === 'file') {
+                    if (!s.exists) label += ' (not found)';
+                    else if (s.size === 0) label += ' (empty)';
+                }
+                return '<option value="' + s.key + '">' + label + '</option>';
+            }).join('');
+            // Keep current selection if possible
+            var cur = $('#ssh_authlog_source_sel').val() || 'auto';
+            $('#ssh_authlog_source_sel').html(options);
+            if ($('#ssh_authlog_source_sel option[value="' + cur + '"]').length) {
+                $('#ssh_authlog_source_sel').val(cur);
+            } else {
+                $('#ssh_authlog_source_sel').val('auto');
+            }
+        });
+    }
+
+    sshAuthlogFixedThead('#ssh_authlog_table_wrap');
+    sshAuthlogInitSources();
+    sshAuthlogLoad();
+</script>

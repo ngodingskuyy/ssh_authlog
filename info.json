@@ -1,0 +1,12 @@
+{
+  "title": "SSH AuthLog Viewer",
+  "name": "ssh_authlog",
+  "type": "plugin",
+  "ps": "View SSH login success/failed events (auth.log/secure/messages/journalctl) in detail.",
+  "versions": "1.1",
+  "author": "NgodingSkuyy",
+  "home": "https://ngodingskuyy.dev",
+  "id": 0,
+  "checks": "/www/server/panel/plugin/ssh_authlog",
+  "display": 1
+}
