@@ -7,24 +7,62 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
 
-if [ ! -f "info.json" ]; then
-  echo "info.json not found" >&2
-  exit 1
+REF="HEAD"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --ref)
+      REF="${2:-}";
+      if [ -z "$REF" ]; then
+        echo "--ref requires a value" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    --ref=*)
+      REF="${1#*=}"
+      if [ -z "$REF" ]; then
+        echo "--ref requires a value" >&2
+        exit 2
+      fi
+      shift 1
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+INFO_JSON="info.json"
+INFO_PAYLOAD=""
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  INFO_PAYLOAD="$(git show "${REF}:${INFO_JSON}" 2>/dev/null || true)"
+fi
+
+if [ -z "$INFO_PAYLOAD" ]; then
+  if [ ! -f "$INFO_JSON" ]; then
+    echo "info.json not found" >&2
+    exit 1
+  fi
+  INFO_PAYLOAD="$(cat "$INFO_JSON")"
 fi
 
 NAME="$(python3 - <<'PY'
-import json
-with open('info.json','r',encoding='utf-8') as f:
-  data=json.load(f)
+import json,sys
+data=json.loads(sys.stdin.read())
 print(str(data.get('name','ssh_authlog')).strip())
 PY
+<<<"$INFO_PAYLOAD"
 )"
+
 VERSION="$(python3 - <<'PY'
-import json
-with open('info.json','r',encoding='utf-8') as f:
-    data=json.load(f)
+import json,sys
+data=json.loads(sys.stdin.read())
 print(str(data.get('versions','')).strip())
 PY
+<<<"$INFO_PAYLOAD"
 )"
 
 if [ -z "$VERSION" ]; then
@@ -40,7 +78,7 @@ rm -f "$OUT_FILE"
 
 # Prefer git archive if available (ensures no untracked files get in)
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  git archive --format=zip --output "$OUT_FILE" --prefix "${NAME}/" HEAD
+  git archive --format=zip --output "$OUT_FILE" --prefix "${NAME}/" "$REF"
 else
   # Fallback: zip current folder excluding common junk
   if ! command -v zip >/dev/null 2>&1; then
