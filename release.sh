@@ -7,7 +7,7 @@ set -euo pipefail
 #   ./release.sh            # tag + push + release
 #   ./release.sh --dry-run  # show what would happen
 #   ./release.sh --force    # overwrite existing tag/release (dangerous)
- #   ./release.sh --ref main # release based on a ref (default: main)
+#   ./release.sh --ref main  # release based on a ref (default: main)
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
@@ -16,23 +16,44 @@ DRY_RUN=0
 FORCE=0
 REF="main"
 
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run) DRY_RUN=1 ;;
-    --force) FORCE=1 ;;
+usage() {
+  cat >&2 <<'USAGE'
+Usage:
+  ./release.sh [--dry-run] [--force] [--ref <git-ref>]
+  ./release.sh [--dry-run] [--force] [--ref=<git-ref>]
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1; shift ;;
+    --force) FORCE=1; shift ;;
     --ref)
-      echo "Use: --ref=<git-ref>" >&2
-      exit 2
+      shift
+      if [ "$#" -lt 1 ]; then
+        echo "--ref requires a value" >&2
+        usage
+        exit 2
+      fi
+      REF="$1"
+      shift
       ;;
     --ref=*)
-      REF="${arg#*=}"
+      REF="${1#*=}"
+      shift
       if [ -z "$REF" ]; then
         echo "--ref requires a value" >&2
+        usage
         exit 2
       fi
       ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
     *)
-      echo "Unknown arg: $arg" >&2
+      echo "Unknown arg: $1" >&2
+      usage
       exit 2
       ;;
   esac
@@ -55,26 +76,14 @@ if ! git rev-parse -q --verify "$REF" >/dev/null 2>&1; then
 fi
 
 INFO_PAYLOAD="$(git show "${REF}:info.json" 2>/dev/null || true)"
-if [ -z "$INFO_PAYLOAD" ]; then
+if [ -z "${INFO_PAYLOAD//[$'\t\r\n ']/}" ]; then
   echo "Could not read info.json from ref: $REF" >&2
   exit 1
 fi
 
-NAME="$(python3 - <<'PY'
-import json,sys
-data=json.loads(sys.stdin.read())
-print(str(data.get('name','ssh_authlog')).strip())
-PY
-<<<"$INFO_PAYLOAD"
-)"
+NAME="$(python3 -c 'import json,sys; data=json.loads(sys.stdin.read()); print(str(data.get("name","ssh_authlog")).strip())' <<<"$INFO_PAYLOAD")"
 
-VERSION="$(python3 - <<'PY'
-import json,sys
-data=json.loads(sys.stdin.read())
-print(str(data.get('versions','')).strip())
-PY
-<<<"$INFO_PAYLOAD"
-)"
+VERSION="$(python3 -c 'import json,sys; data=json.loads(sys.stdin.read()); print(str(data.get("versions","")).strip())' <<<"$INFO_PAYLOAD")"
 
 if [ -z "$VERSION" ]; then
   echo "Could not read versions from info.json" >&2

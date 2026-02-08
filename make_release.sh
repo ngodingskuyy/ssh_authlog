@@ -41,7 +41,7 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   INFO_PAYLOAD="$(git show "${REF}:${INFO_JSON}" 2>/dev/null || true)"
 fi
 
-if [ -z "$INFO_PAYLOAD" ]; then
+if [ -z "${INFO_PAYLOAD//[$'\t\r\n ']/}" ]; then
   if [ ! -f "$INFO_JSON" ]; then
     echo "info.json not found" >&2
     exit 1
@@ -49,21 +49,9 @@ if [ -z "$INFO_PAYLOAD" ]; then
   INFO_PAYLOAD="$(cat "$INFO_JSON")"
 fi
 
-NAME="$(python3 - <<'PY'
-import json,sys
-data=json.loads(sys.stdin.read())
-print(str(data.get('name','ssh_authlog')).strip())
-PY
-<<<"$INFO_PAYLOAD"
-)"
+NAME="$(python3 -c 'import json,sys; data=json.loads(sys.stdin.read()); print(str(data.get("name","ssh_authlog")).strip())' <<<"$INFO_PAYLOAD")"
 
-VERSION="$(python3 - <<'PY'
-import json,sys
-data=json.loads(sys.stdin.read())
-print(str(data.get('versions','')).strip())
-PY
-<<<"$INFO_PAYLOAD"
-)"
+VERSION="$(python3 -c 'import json,sys; data=json.loads(sys.stdin.read()); print(str(data.get("versions","")).strip())' <<<"$INFO_PAYLOAD")"
 
 if [ -z "$VERSION" ]; then
   echo "Could not read versions from info.json" >&2
